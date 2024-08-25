@@ -4,7 +4,7 @@ with lib;
 
 {
   options.pasta = {
-    enable = mkEnableOption "Pasta networking" // { default = false; };
+    enable = mkEnableOption "Pasta networking" // { default = true; };
     package = mkOption {
       description = "Pasta package to use.";
       type = types.package;
