@@ -575,13 +575,18 @@ func (bwrap *Bwrap) KillAndWaitUntilChildExit(kill bool) {
 		panic(err)
 	}
 	if kill {
+		fmt.Printf("Killing bwrap child %d\n", bwrap.Info.ChildPid)
 		bwrapChild.Kill()
 	}
+	fmt.Printf("Waiting for bwrap child %d exit\n", bwrap.Info.ChildPid)
 	if _, err := bwrapChild.Wait(); err != nil {
 		syscallErr, ok := err.(*os.SyscallError)
 		if !ok || syscallErr.Unwrap() != unix.ECHILD {
 			panic(err)
 		}
+		fmt.Printf("Bwrap child already exited: %s\n", syscallErr.Error())
+	} else {
+		println("Bwrap child exited")
 	}
 }
 
@@ -628,6 +633,7 @@ func StartChildReaper() (reaper ChildReaper) {
 	go func() {
 		for {
 			<-reaper.Signals
+			println("SIGCHLD received")
 			for reaper.ReapChild(false) {
 			}
 		}
@@ -652,7 +658,11 @@ func (reaper *ChildReaper) ReapChild(wait bool) bool {
 		pid, err := unix.Wait4(-1, &status, options, nil)
 		switch err {
 		case nil:
-			return pid > 0
+			if pid > 0 {
+				fmt.Printf("Grandchild pid %d exited\n", pid)
+				return true
+			}
+			return false
 		case unix.ECHILD:
 			return false
 		case unix.EINTR:
@@ -790,6 +800,7 @@ func run() error {
 		}
 	}
 
+	println("Bwrap parent exited successfully")
 	bwrap.WaitUntilChildExit()
 
 	return nil
