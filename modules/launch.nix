@@ -127,6 +127,7 @@ let
     name,
     mainProgram ? null,
     executablePath ? "/bin/${mainProgram}",
+    sourceExecutablePath ? executablePath,
     passthru ? {}
   }: pkgs.runCommandLocal "nixpak-${name}" {
     inherit passthru;
@@ -136,7 +137,7 @@ let
     makeWrapper ${launcher}/bin/launcher $out${executablePath} \
       ${concatStringsSep " " (flatten [
         "--set BWRAP_EXE ${config.bubblewrap.package}/bin/bwrap"
-        "--set NIXPAK_APP_EXE ${app}${executablePath}"
+        "--set NIXPAK_APP_EXE ${app}${sourceExecutablePath}"
         "--set BUBBLEWRAP_ARGS ${bwrapArgsJson}"
         "--set FLATPAK_METADATA_TEMPLATE ${config.flatpak.infoFile}"
         (optionals config.dbus.enable "--set XDG_DBUS_PROXY_EXE ${dbusProxyWrapper}")
@@ -226,6 +227,7 @@ in {
 
   config.script = mkWrapperScript {
     name = app.name or "app";
+    sourceExecutablePath = "/${config.app.binPath}";
     inherit mainProgram passthru;
   };
 
