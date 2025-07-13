@@ -214,28 +214,29 @@ func waitUntilFileAppears(filename string) {
 }
 
 type Config struct {
-	AppExe                  string
-	AppArgs                 []string
-	BwrapExe                string
-	BwrapArgs               []string
-	UseDbusProxy            bool
-	DbusproxyExe            string
-	DbusproxyArgs           []string
-	UsePasta                bool
-	PastaExe                string
-	PastaArgs               []string
-	UseFlatpakMetadata      bool
-	FlatpakMetadataTemplate string
-	UseWaylandProxy         bool
-	WaylandProxyExe         string
-	WaylandProxyArgs        []string
-	WaylandProxySocketPath  string
-	UsePipewireContainer    bool
-	PipewireContainerExe    string
-	PipewireContainerArgs   []string
-	PipewireSocketPathInner string
-	UsePipewirePulse        bool
-	PipewirePulseExe        string
+	AppExe                   string
+	AppArgs                  []string
+	BwrapExe                 string
+	BwrapArgs                []string
+	UseDbusProxy             bool
+	DbusproxyExe             string
+	DbusproxyArgs            []string
+	UsePasta                 bool
+	PastaExe                 string
+	PastaArgs                []string
+	UseFlatpakMetadata       bool
+	FlatpakMetadataTemplate  string
+	FlatpakMetadataDirectory string
+	UseWaylandProxy          bool
+	WaylandProxyExe          string
+	WaylandProxyArgs         []string
+	WaylandProxySocketPath   string
+	UsePipewireContainer     bool
+	PipewireContainerExe     string
+	PipewireContainerArgs    []string
+	PipewireSocketPathInner  string
+	UsePipewirePulse         bool
+	PipewirePulseExe         string
 }
 
 func readConfig() (conf Config) {
@@ -460,12 +461,12 @@ type Bwrap struct {
 	Info       BwrapInfo
 }
 
-func StartBwrap(conf Config, flatpakMetadata FlatpakMetadata, pipewireSocket string) (bwrap Bwrap) {
+func StartBwrap(conf Config, pipewireSocket string) (bwrap Bwrap) {
 	failed := true
 
 	bwrapArgs := append([]string{"--info-fd", "3", "--block-fd", "4"}, conf.BwrapArgs...)
 	if conf.UseFlatpakMetadata {
-		bwrapArgs = append(bwrapArgs, "--ro-bind", filepath.Join(flatpakMetadata.MetadataDirectory, "info"), "/.flatpak-info")
+		bwrapArgs = append(bwrapArgs, "--ro-bind", filepath.Join(conf.FlatpakMetadataDirectory, "info"), "/.flatpak-info")
 	}
 	if conf.UseWaylandProxy {
 		waylandProxySocketPathInner := filepath.Join(requiredEnv("XDG_RUNTIME_DIR"), "nixpak-wayland")
@@ -674,16 +675,16 @@ func (reaper *ChildReaper) Close() {
 }
 
 type FlatpakMetadata struct {
-	InfoFileTemplate  string
 	MetadataDirectory string
 }
 
-func (f *FlatpakMetadata) Setup() {
+func SetupFlatpakMetadata(conf Config) (f FlatpakMetadata) {
+	f.MetadataDirectory = conf.FlatpakMetadataDirectory
 	err := os.MkdirAll(f.MetadataDirectory, 0700)
 	if err != nil {
 		panic(err)
 	}
-	src, err := os.Open(f.InfoFileTemplate)
+	src, err := os.Open(conf.FlatpakMetadataTemplate)
 	if err != nil {
 		panic(err)
 	}
@@ -704,6 +705,8 @@ func (f *FlatpakMetadata) Setup() {
 	}
 	// horrible hack
 	os.Setenv("FLATPAK_METADATA_FILE", metadataInfoFilePath)
+
+	return
 }
 
 func (f *FlatpakMetadata) WriteBwrapInfo(infoJson []byte) {
@@ -727,14 +730,11 @@ func run() error {
 	defer reaper.Close()
 	defer reaper.WaitAndReapAllChildren()
 
-	var flatpakMetadata FlatpakMetadata
-
 	conf := readConfig()
 
+	var flatpakMetadata FlatpakMetadata
 	if conf.UseFlatpakMetadata {
-		flatpakMetadata.InfoFileTemplate = conf.FlatpakMetadataTemplate
-		flatpakMetadata.MetadataDirectory = filepath.Join(requireEnv("XDG_RUNTIME_DIR"), ".flatpak", "nixpak-app-"+instanceId())
-		flatpakMetadata.Setup()
+		flatpakMetadata = SetupFlatpakMetadata(conf)
 		defer flatpakMetadata.Cleanup()
 	}
 
@@ -758,7 +758,7 @@ func run() error {
 		pipewireSocket = pipewireContainer.WaitUntilStartup()
 	}
 
-	bwrap := StartBwrap(conf, flatpakMetadata, pipewireSocket)
+	bwrap := StartBwrap(conf, pipewireSocket)
 	defer bwrap.Close()
 	bwrapInfo := bwrap.WaitUntilSandboxReady()
 	defer bwrap.CloseChild()
