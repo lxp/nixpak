@@ -271,6 +271,7 @@ func readConfig() (conf Config) {
 	conf.UseFlatpakMetadata = useFlatpakMetadata
 	if useFlatpakMetadata {
 		conf.FlatpakMetadataTemplate = flatpakMetadataTemplate
+		conf.FlatpakMetadataDirectory = filepath.Join(requiredEnv("XDG_RUNTIME_DIR"), ".flatpak", "nixpak-app-"+instanceId())
 	}
 
 	waylandProxyArgsJson, useWaylandProxy := os.LookupEnv("WAYLAND_PROXY_ARGS")
@@ -464,7 +465,7 @@ func StartBwrap(conf Config, flatpakMetadata FlatpakMetadata, pipewireSocket str
 
 	bwrapArgs := append([]string{"--info-fd", "3", "--block-fd", "4"}, conf.BwrapArgs...)
 	if conf.UseFlatpakMetadata {
-		bwrapArgs = append(bwrapArgs, []string{"--ro-bind", flatpakMetadata.MetadataDirectory + "/info", "/.flatpak-info"}...)
+		bwrapArgs = append(bwrapArgs, "--ro-bind", filepath.Join(flatpakMetadata.MetadataDirectory, "info"), "/.flatpak-info")
 	}
 	if conf.UseWaylandProxy {
 		waylandProxySocketPathInner := filepath.Join(requiredEnv("XDG_RUNTIME_DIR"), "nixpak-wayland")
@@ -687,7 +688,8 @@ func (f *FlatpakMetadata) Setup() {
 		panic(err)
 	}
 	defer src.Close()
-	dst, err := os.Create(f.MetadataDirectory + "/info")
+	metadataInfoFilePath := filepath.Join(f.MetadataDirectory, "info")
+	dst, err := os.Create(metadataInfoFilePath)
 	if err != nil {
 		panic(err)
 	}
@@ -701,11 +703,11 @@ func (f *FlatpakMetadata) Setup() {
 		panic(err)
 	}
 	// horrible hack
-	os.Setenv("FLATPAK_METADATA_FILE", f.MetadataDirectory+"/info")
+	os.Setenv("FLATPAK_METADATA_FILE", metadataInfoFilePath)
 }
 
 func (f *FlatpakMetadata) WriteBwrapInfo(infoJson []byte) {
-	file, err := os.Create(f.MetadataDirectory + "/bwrapinfo.json")
+	file, err := os.Create(filepath.Join(f.MetadataDirectory, "bwrapinfo.json"))
 	if err != nil {
 		panic(err)
 	}
@@ -731,8 +733,9 @@ func run() error {
 
 	if conf.UseFlatpakMetadata {
 		flatpakMetadata.InfoFileTemplate = conf.FlatpakMetadataTemplate
-		flatpakMetadata.MetadataDirectory = os.Getenv("XDG_RUNTIME_DIR") + "/.flatpak/nixpak-app-" + instanceId()
+		flatpakMetadata.MetadataDirectory = filepath.Join(requireEnv("XDG_RUNTIME_DIR"), ".flatpak", "nixpak-app-"+instanceId())
 		flatpakMetadata.Setup()
+		defer flatpakMetadata.Cleanup()
 	}
 
 	if conf.UseDbusProxy {
@@ -762,7 +765,6 @@ func run() error {
 
 	if conf.UseFlatpakMetadata {
 		flatpakMetadata.WriteBwrapInfo(bwrapInfo.Raw)
-		defer flatpakMetadata.Cleanup()
 	}
 
 	if conf.UsePasta {
