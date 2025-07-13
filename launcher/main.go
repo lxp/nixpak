@@ -679,33 +679,43 @@ type FlatpakMetadata struct {
 }
 
 func SetupFlatpakMetadata(conf Config) (f FlatpakMetadata) {
+	failed := true
+
 	f.MetadataDirectory = conf.FlatpakMetadataDirectory
-	err := os.MkdirAll(f.MetadataDirectory, 0700)
-	if err != nil {
+
+	if err := os.MkdirAll(f.MetadataDirectory, 0700); err != nil {
 		panic(err)
 	}
+	defer func() {
+		if failed {
+			f.Cleanup()
+		}
+	}()
+
 	src, err := os.Open(conf.FlatpakMetadataTemplate)
 	if err != nil {
 		panic(err)
 	}
 	defer src.Close()
+
 	metadataInfoFilePath := filepath.Join(f.MetadataDirectory, "info")
 	dst, err := os.Create(metadataInfoFilePath)
 	if err != nil {
 		panic(err)
 	}
 	defer dst.Close()
-	_, err = io.Copy(dst, src)
-	if err != nil {
+
+	if _, err = io.Copy(dst, src); err != nil {
 		panic(err)
 	}
-	_, err = dst.Write([]byte("\n\n[Instance]\ninstance-id=nixpak-app-" + instanceId() + "\n"))
-	if err != nil {
+	if _, err = dst.Write([]byte("\n\n[Instance]\ninstance-id=nixpak-app-" + instanceId() + "\n")); err != nil {
 		panic(err)
 	}
+
 	// horrible hack
 	os.Setenv("FLATPAK_METADATA_FILE", metadataInfoFilePath)
 
+	failed = false
 	return
 }
 
@@ -715,8 +725,8 @@ func (f *FlatpakMetadata) WriteBwrapInfo(infoJson []byte) {
 		panic(err)
 	}
 	defer file.Close()
-	_, err = file.Write(infoJson)
-	if err != nil {
+
+	if _, err = file.Write(infoJson); err != nil {
 		panic(err)
 	}
 }
