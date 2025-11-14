@@ -25,5 +25,12 @@ with lib;
         default = removePrefix "${config.app.package}/" (getExe config.app.package);
       };
     }
+    {
+      options.app.outMainProgram = mkOption {
+        description = "The wrapped app's mainProgram.";
+        type = types.str;
+        default = builtins.baseNameOf config.app.binPath;
+      };
+    }
   ];
 }

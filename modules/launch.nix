@@ -114,7 +114,7 @@ let
   pipewireContainerArgs = [ "-oL" "--" "${config.pipewire.package}/bin/pw-container" ] ++ config.pipewire.args;
   pipewireContainerArgsJson = pkgs.writeText "pipewire-container-args.json" (builtins.toJSON pipewireContainerArgs);
 
-  mainProgram = builtins.baseNameOf config.app.binPath;
+  mainProgram = config.app.outMainProgram;
 
   mkWrapperScript = {
     name,
